@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LHU FaceID - Hệ thống nhận diện khuôn mặt sinh viên</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #8b5cf6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --gray: #64748b;
+            --border: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: var(--dark);
+            line-height: 1.6;
+        }
+
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 2rem 3rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .header-left h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .header-left p {
+            color: var(--gray);
+            font-size: 0.95rem;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .nav-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: white;
+            color: var(--primary);
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 500;
+            transition: all 0.3s;
+            border: 2px solid var(--border);
+        }
+
+        .nav-link:hover {
+            background: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        /* Main Card */
+        .main-card {
+            background: white;
+            border-radius: 24px;
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            background: var(--light);
+            border-bottom: 2px solid var(--border);
+            padding: 0.5rem;
+            gap: 0.5rem;
+            overflow-x: auto;
+        }
+
+        .tab {
+            flex: 1;
+            min-width: 150px;
+            padding: 1rem 1.5rem;
+            background: transparent;
+            border: none;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--gray);
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+        }
+
+        .tab.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: var(--shadow);
+        }
+
+        .tab-content {
+            display: none;
+            padding: 2.5rem;
+            animation: fadeIn 0.3s;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Forms */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .form-input {
+            padding: 0.875rem 1rem;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.875rem 1.75rem;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: var(--shadow);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin: 1.5rem 0;
+        }
+
+        /* Upload Area */
+        .upload-area {
+            border: 3px dashed var(--border);
+            border-radius: 16px;
+            padding: 3rem 2rem;
+            text-align: center;
+            background: var(--light);
+            transition: all 0.3s;
+            cursor: pointer;
+            margin-bottom: 1.5rem;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .upload-area.dragover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 4rem;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        .upload-text {
+            color: var(--gray);
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        /* Preview */
+        .preview-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+
+        .preview-image {
+            position: relative;
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        .preview-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Video Container */
+        .video-container {
+            position: relative;
+            max-width: 640px;
+            margin: 0 auto 1.5rem;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .video-container video {
+            width: 100%;
+            display: block;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .video-status {
+            position: absolute;
+            bottom: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+        }
+
+        /* Results */
+        .result-card {
+            margin-top: 2rem;
+            padding: 2rem;
+            border-radius: 16px;
+            animation: slideIn 0.3s;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-card.success {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            border: 2px solid var(--success);
+        }
+
+        .result-card.error {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+            border: 2px solid var(--danger);
+        }
+
+        .result-card.uncertain {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 2px solid var(--warning);
+        }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .result-icon {
+            font-size: 2.5rem;
+        }
+
+        .result-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--dark);
+        }
+
+        .result-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-label {
+            font-size: 0.85rem;
+            color: var(--gray);
+            margin-bottom: 0.25rem;
+        }
+
+        .info-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        /* Similarity Bar */
+        .similarity-container {
+            margin-top: 1.5rem;
+        }
+
+        .similarity-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .similarity-bar {
+            height: 32px;
+            background: var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .similarity-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--success) 0%, #34d399 100%);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            transition: width 0.5s ease;
+            box-shadow: var(--shadow);
+        }
+
+        /* Loader */
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Section Title */
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .app-container {
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1.5rem;
+            }
+
+            .header-left h1 {
+                font-size: 1.5rem;
+            }
+
+            .tab-content {
+                padding: 1.5rem;
+            }
+
+            .tabs {
+                flex-direction: column;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Utility Classes */
+        .text-center {
+            text-align: center;
+        }
+
+        .mt-1 { margin-top: 0.5rem; }
+        .mt-2 { margin-top: 1rem; }
+        .mt-3 { margin-top: 1.5rem; }
+        .mb-1 { margin-bottom: 0.5rem; }
+        .mb-2 { margin-bottom: 1rem; }
+        .mb-3 { margin-bottom: 1.5rem; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <h1><i class="fas fa-id-card"></i> LHU FaceID</h1>
+                <p>Hệ thống nhận diện khuôn mặt sinh viên thông minh</p>
+            </div>
+            <div class="header-actions">
+                <a href="/attendance" class="nav-link">
+                    <i class="fas fa-calendar-check"></i> Điểm danh
+                </a>
+                <a href="/management" class="nav-link">
+                    <i class="fas fa-users-cog"></i> Quản lý
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Card -->
+        <div class="main-card">
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('verify')">
+                    <i class="fas fa-search"></i> Nhận diện
+                </button>
+                <button class="tab" onclick="switchTab('register')">
+                    <i class="fas fa-user-plus"></i> Đăng ký
+                </button>
+                <button class="tab" onclick="switchTab('info')">
+                    <i class="fas fa-info-circle"></i> Tra cứu
+                </button>
+            </div>
+
+            <!-- Tab: Verify Face -->
+            <div id="verify" class="tab-content active">
+                <h2 class="section-title">
+                    <i class="fas fa-face-recognition"></i> Nhận diện khuôn mặt
+                </h2>
+                
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="openCamera('verify')" id="openCameraBtn">
+                        <i class="fas fa-video"></i> Mở Camera & Auto Detect
+                    </button>
+                    <button class="btn btn-danger" onclick="closeCamera('verify')" id="closeCameraBtn" style="display: none;">
+                        <i class="fas fa-stop"></i> Đóng Camera
+                    </button>
+                    <button class="btn btn-warning" id="toggleAutoBtn" onclick="toggleAutoDetect()" style="display: none;">
+                        <i class="fas fa-pause"></i> Tạm dừng Auto Detect
+                    </button>
+                </div>
+
+                <div id="videoContainer" style="display: none;">
+                    <div class="video-container">
+                        <video id="video" autoplay playsinline></video>
+                        <canvas id="overlayCanvas" class="video-overlay"></canvas>
+                        <div class="video-status" id="verifyStatus">Đang chờ nhận diện...</div>
+                    </div>
+                </div>
+
+                <div class="upload-area" onclick="document.getElementById('verifyFile').click()" 
+                     ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                    <div class="upload-icon">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                    </div>
+                    <div class="upload-text">Kéo thả ảnh vào đây hoặc click để chọn</div>
+                    <input type="file" id="verifyFile" class="file-input" accept="image/*" onchange="handleFileSelect(event)">
+                </div>
+
+                <div id="verifyPreview" class="preview-container"></div>
+                <div id="verifyResult"></div>
+            </div>
+
+            <!-- Tab: Register Face -->
+            <div id="register" class="tab-content">
+                <h2 class="section-title">
+                    <i class="fas fa-user-plus"></i> Đăng ký sinh viên mới
+                </h2>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Mã sinh viên *</label>
+                        <input type="text" id="studentId" class="form-input" placeholder="VD: S001">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Họ tên *</label>
+                        <input type="text" id="studentName" class="form-input" placeholder="VD: Nguyễn Văn A">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Lớp *</label>
+                        <input type="text" id="studentClass" class="form-input" placeholder="VD: K50">
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="openCamera('register')" id="openCameraRegisterBtn">
+                        <i class="fas fa-video"></i> Mở Camera
+                    </button>
+                    <button class="btn btn-danger" onclick="closeCamera('register')" id="closeCameraRegisterBtn" style="display: none;">
+                        <i class="fas fa-stop"></i> Đóng Camera
+                    </button>
+                </div>
+
+                <div id="videoContainerRegister" style="display: none;">
+                    <div class="video-container">
+                        <video id="videoRegister" autoplay playsinline></video>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-success" onclick="captureFromCamera('register')">
+                            <i class="fas fa-camera"></i> Chụp ảnh
+                        </button>
+                        <button class="btn btn-primary" onclick="addToCaptureList()">
+                            <i class="fas fa-plus"></i> Thêm vào danh sách
+                        </button>
+                    </div>
+                    <div id="captureList" class="mt-2"></div>
+                </div>
+
+                <div class="upload-area" onclick="document.getElementById('registerFile').click()" 
+                     ondrop="handleDropRegister(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                    <div class="upload-icon">
+                        <i class="fas fa-images"></i>
+                    </div>
+                    <div class="upload-text">Upload nhiều ảnh khuôn mặt (Khuyến nghị: 3-5 ảnh)</div>
+                    <div style="color: var(--gray); font-size: 0.9rem; margin-top: 0.5rem;">
+                        Giữ Ctrl để chọn nhiều ảnh
+                    </div>
+                    <input type="file" id="registerFile" class="file-input" accept="image/*" multiple onchange="handleFileSelectRegister(event)">
+                </div>
+
+                <div id="registerPreview" class="preview-container"></div>
+                
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="registerFace()" id="registerBtn">
+                        <i class="fas fa-save"></i> Đăng ký sinh viên
+                    </button>
+                </div>
+
+                <div id="registerResult"></div>
+            </div>
+
+            <!-- Tab: Get Info -->
+            <div id="info" class="tab-content">
+                <h2 class="section-title">
+                    <i class="fas fa-search"></i> Tra cứu thông tin sinh viên
+                </h2>
+
+                <div class="form-group" style="max-width: 400px; margin: 0 auto 2rem;">
+                    <label class="form-label">Mã sinh viên</label>
+                    <input type="text" id="infoStudentId" class="form-input" placeholder="Nhập mã sinh viên">
+                </div>
+
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="getStudentInfo()" id="infoBtn">
+                        <i class="fas fa-search"></i> Tra cứu
+                    </button>
+                </div>
+
+                <div id="infoResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+        let selectedRegisterFiles = [];
+        let capturedImages = [];
+        let autoDetectInterval = null;
+        let isAutoDetecting = false;
+        let currentStream = null;
+
+        function switchTab(tabName) {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+                document.getElementById('videoContainer').style.display = 'none';
+                document.getElementById('openCameraBtn').style.display = 'inline-flex';
+                document.getElementById('closeCameraBtn').style.display = 'none';
+                document.getElementById('toggleAutoBtn').style.display = 'none';
+                document.getElementById('video').srcObject = null;
+                document.getElementById('videoContainerRegister').style.display = 'none';
+                document.getElementById('openCameraRegisterBtn').style.display = 'inline-flex';
+                document.getElementById('closeCameraRegisterBtn').style.display = 'none';
+                document.getElementById('videoRegister').srcObject = null;
+                
+                // Stop auto detect
+                if (autoDetectInterval) {
+                    clearInterval(autoDetectInterval);
+                    autoDetectInterval = null;
+                }
+                isAutoDetecting = false;
+                isProcessing = false;
+            }
+
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+
+            document.getElementById('verifyResult').innerHTML = '';
+            document.getElementById('registerResult').innerHTML = '';
+            document.getElementById('infoResult').innerHTML = '';
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                selectedFile = file;
+                previewImage(file, 'verifyPreview');
+            }
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                selectedFile = file;
+                previewImage(file, 'verifyPreview');
+            }
+        }
+
+        function handleDropRegister(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length > 0) {
+                selectedRegisterFiles = [...capturedImages, ...files];
+                previewMultipleImages(selectedRegisterFiles, 'registerPreview');
+            }
+        }
+
+        function handleFileSelectRegister(e) {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                selectedRegisterFiles = [...capturedImages, ...files];
+                previewMultipleImages(selectedRegisterFiles, 'registerPreview');
+            }
+        }
+
+        function previewMultipleImages(files, containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            files.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const div = document.createElement('div');
+                    div.className = 'preview-image';
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    div.appendChild(img);
+                    container.appendChild(div);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function previewImage(file, containerId) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const container = document.getElementById(containerId);
+                container.innerHTML = '';
+                const div = document.createElement('div');
+                div.className = 'preview-image';
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                div.appendChild(img);
+                container.appendChild(div);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function verifyFace() {
+            if (!selectedFile) {
+                alert('Vui lòng chọn ảnh!');
+                return;
+            }
+            
+            const result = document.getElementById('verifyResult');
+            result.innerHTML = '<div class="loader"></div>';
+            
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            
+            try {
+                const response = await fetch('/verify_face', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                displayVerifyResult(data);
+            } catch (error) {
+                result.innerHTML = `<div class="result-card error">
+                    <div class="result-header">
+                        <div class="result-icon">❌</div>
+                        <div class="result-title">Lỗi!</div>
+                    </div>
+                    <p>${error.message}</p>
+                </div>`;
+            }
+        }
+
+        function displayVerifyResult(data) {
+            const result = document.getElementById('verifyResult');
+            
+            if (data.status === 'MATCH' || data.status === 'UNCERTAIN') {
+                const className = data.status === 'MATCH' ? 'success' : 'uncertain';
+                const icon = data.status === 'MATCH' ? '✅' : '⚠️';
+                const title = data.status === 'MATCH' ? 'Nhận diện thành công!' : 'Cần kiểm tra lại';
+                const similarityPercent = (data.similarity * 100).toFixed(1);
+                
+                result.innerHTML = `
+                    <div class="result-card ${className}">
+                        <div class="result-header">
+                            <div class="result-icon">${icon}</div>
+                            <div class="result-title">${title}</div>
+                        </div>
+                        ${data.student_info ? `
+                            <div class="result-info">
+                                <div class="info-item">
+                                    <div class="info-label">Mã sinh viên</div>
+                                    <div class="info-value">${data.student_info.student_id}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Họ tên</div>
+                                    <div class="info-value">${data.student_info.name}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Lớp</div>
+                                    <div class="info-value">${data.student_info.class}</div>
+                                </div>
+                            </div>
+                        ` : ''}
+                        <div class="similarity-container">
+                            <div class="similarity-label">
+                                <span>Độ tương đồng</span>
+                                <span>${similarityPercent}%</span>
+                            </div>
+                            <div class="similarity-bar">
+                                <div class="similarity-fill" style="width: ${similarityPercent}%">${similarityPercent}%</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                result.innerHTML = `
+                    <div class="result-card error">
+                        <div class="result-header">
+                            <div class="result-icon">❌</div>
+                            <div class="result-title">Không nhận diện được</div>
+                        </div>
+                        <p>Không tìm thấy khuôn mặt khớp trong hệ thống.</p>
+                        <div class="similarity-container mt-2">
+                            <div class="similarity-label">
+                                <span>Độ tương đồng</span>
+                                <span>${(data.similarity * 100).toFixed(1)}%</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        async function registerFace() {
+            const studentId = document.getElementById('studentId').value;
+            const name = document.getElementById('studentName').value;
+            const class_ = document.getElementById('studentClass').value;
+            
+            if (!studentId || !name || !class_ || selectedRegisterFiles.length === 0) {
+                alert('Vui lòng điền đầy đủ thông tin và chọn ít nhất 1 ảnh!');
+                return;
+            }
+            
+            const btn = document.getElementById('registerBtn');
+            const result = document.getElementById('registerResult');
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loader" style="width: 20px; height: 20px; border-width: 2px;"></div> Đang đăng ký...';
+            result.innerHTML = '<div class="loader"></div>';
+            
+            const formData = new FormData();
+            selectedRegisterFiles.forEach(file => formData.append('files', file));
+            formData.append('student_id', studentId);
+            formData.append('name', name);
+            formData.append('class_name', class_);
+            
+            try {
+                const response = await fetch('/register_face', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success') {
+                    result.innerHTML = `
+                        <div class="result-card success">
+                            <div class="result-header">
+                                <div class="result-icon">✅</div>
+                                <div class="result-title">Đăng ký thành công!</div>
+                            </div>
+                            <div class="result-info">
+                                <div class="info-item">
+                                    <div class="info-label">Mã SV</div>
+                                    <div class="info-value">${data.student_id}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Họ tên</div>
+                                    <div class="info-value">${data.name}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Lớp</div>
+                                    <div class="info-value">${data.class}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Số ảnh</div>
+                                    <div class="info-value">${data.images_count || selectedRegisterFiles.length}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    document.getElementById('studentId').value = '';
+                    document.getElementById('studentName').value = '';
+                    document.getElementById('studentClass').value = '';
+                    selectedRegisterFiles = [];
+                    capturedImages = [];
+                    document.getElementById('registerPreview').innerHTML = '';
+                    document.getElementById('registerFile').value = '';
+                } else {
+                    result.innerHTML = `<div class="result-card error">
+                        <div class="result-header">
+                            <div class="result-icon">❌</div>
+                            <div class="result-title">Lỗi!</div>
+                        </div>
+                        <p>${data.detail || data.message || "Unknown error"}</p>
+                    </div>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<div class="result-card error">
+                    <div class="result-header">
+                        <div class="result-icon">❌</div>
+                        <div class="result-title">Lỗi!</div>
+                    </div>
+                    <p>${error.message}</p>
+                </div>`;
+            }
+            
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Đăng ký sinh viên';
+        }
+
+        async function getStudentInfo() {
+            const studentId = document.getElementById('infoStudentId').value;
+            
+            if (!studentId) {
+                alert('Vui lòng nhập mã sinh viên!');
+                return;
+            }
+            
+            const btn = document.getElementById('infoBtn');
+            const result = document.getElementById('infoResult');
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loader" style="width: 20px; height: 20px; border-width: 2px;"></div> Đang tra cứu...';
+            result.innerHTML = '<div class="loader"></div>';
+            
+            try {
+                const response = await fetch(`/get_student_info/${studentId}`);
+                const data = await response.json();
+                
+                if (response.ok && data.student_info) {
+                    result.innerHTML = `
+                        <div class="result-card success">
+                            <div class="result-header">
+                                <div class="result-icon">✅</div>
+                                <div class="result-title">Tìm thấy sinh viên</div>
+                            </div>
+                            <div class="result-info">
+                                <div class="info-item">
+                                    <div class="info-label">Mã SV</div>
+                                    <div class="info-value">${data.student_info.student_id}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Họ tên</div>
+                                    <div class="info-value">${data.student_info.name}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Lớp</div>
+                                    <div class="info-value">${data.student_info.class}</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Check-in cuối</div>
+                                    <div class="info-value">${data.student_info.last_checkin_time || 'Chưa có'}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    result.innerHTML = `
+                        <div class="result-card error">
+                            <div class="result-header">
+                                <div class="result-icon">❌</div>
+                                <div class="result-title">Không tìm thấy</div>
+                            </div>
+                            <p>Không có sinh viên với mã: ${studentId}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                result.innerHTML = `<div class="result-card error">
+                    <div class="result-header">
+                        <div class="result-icon">❌</div>
+                        <div class="result-title">Lỗi!</div>
+                    </div>
+                    <p>${error.message}</p>
+                </div>`;
+            }
+            
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-search"></i> Tra cứu';
+        }
+
+        // Camera functions
+        async function openCamera(type) {
+            try {
+                const constraints = {
+                    video: { 
+                        facingMode: 'user',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                };
+                
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                if (type === 'verify') {
+                    const video = document.getElementById('video');
+                    const overlay = document.getElementById('overlayCanvas');
+                    
+                    video.srcObject = currentStream;
+                    document.getElementById('videoContainer').style.display = 'block';
+                    document.getElementById('openCameraBtn').style.display = 'none';
+                    document.getElementById('closeCameraBtn').style.display = 'inline-flex';
+                    document.getElementById('toggleAutoBtn').style.display = 'inline-flex';
+                    
+                    // Wait for video to load, then initialize overlay and auto-start detection
+                    video.onloadedmetadata = () => {
+                        if (overlay) {
+                            overlay.width = video.videoWidth;
+                            overlay.height = video.videoHeight;
+                        }
+                        
+                        // Auto-start detection after camera is ready
+                        setTimeout(() => {
+                            if (!isAutoDetecting && currentStream) {
+                                toggleAutoDetect();
+                            }
+                        }, 500);
+                    };
+                } else if (type === 'register') {
+                    document.getElementById('videoRegister').srcObject = currentStream;
+                    document.getElementById('videoContainerRegister').style.display = 'block';
+                    document.getElementById('openCameraRegisterBtn').style.display = 'none';
+                    document.getElementById('closeCameraRegisterBtn').style.display = 'inline-flex';
+                }
+            } catch (error) {
+                alert('Không thể truy cập camera: ' + error.message);
+            }
+        }
+
+        function closeCamera(type) {
+            // Stop auto detect if running
+            if (autoDetectInterval) {
+                clearInterval(autoDetectInterval);
+                autoDetectInterval = null;
+            }
+            isAutoDetecting = false;
+            isProcessing = false;
+            
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+            }
+            
+            if (type === 'verify') {
+                document.getElementById('videoContainer').style.display = 'none';
+                document.getElementById('openCameraBtn').style.display = 'inline-flex';
+                document.getElementById('closeCameraBtn').style.display = 'none';
+                document.getElementById('toggleAutoBtn').style.display = 'none';
+                document.getElementById('video').srcObject = null;
+                
+                // Reset button state
+                document.getElementById('toggleAutoBtn').innerHTML = '<i class="fas fa-pause"></i> Tạm dừng Auto Detect';
+                document.getElementById('toggleAutoBtn').className = 'btn btn-warning';
+            } else if (type === 'register') {
+                document.getElementById('videoContainerRegister').style.display = 'none';
+                document.getElementById('openCameraRegisterBtn').style.display = 'inline-flex';
+                document.getElementById('closeCameraRegisterBtn').style.display = 'none';
+                document.getElementById('videoRegister').srcObject = null;
+            }
+        }
+
+        function captureFromCamera(type) {
+            let video, canvas, ctx;
+            
+            if (type === 'verify') {
+                video = document.getElementById('video');
+                canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+                canvas.toBlob(function(blob) {
+                    selectedFile = new File([blob], 'camera.jpg', { type: 'image/jpeg' });
+                    previewImage(selectedFile, 'verifyPreview');
+                    verifyFace();
+                }, 'image/jpeg', 0.95);
+            } else if (type === 'register') {
+                video = document.getElementById('videoRegister');
+                canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+                canvas.toBlob(function(blob) {
+                    const file = new File([blob], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
+                    capturedImages.push(file);
+                    displayCaptureList();
+                }, 'image/jpeg', 0.95);
+            }
+        }
+
+        let isProcessing = false; // Prevent multiple simultaneous requests
+
+        async function autoDetectAndVerify() {
+            // Prevent multiple simultaneous requests
+            if (isProcessing) {
+                return;
+            }
+
+            const video = document.getElementById('video');
+            if (!video || !currentStream) return;
+            if (video.videoWidth === 0 || video.videoHeight === 0) return;
+            
+            // Check if video is ready
+            if (video.readyState < 2) {
+                return;
+            }
+
+            isProcessing = true;
+            
+            try {
+                // Update status
+                document.getElementById('verifyStatus').textContent = '🔍 Đang xử lý...';
+                document.getElementById('verifyStatus').style.color = '#f59e0b';
+                
+                // Capture frame from video
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+                
+                // Convert to blob
+                const blob = await new Promise((resolve, reject) => {
+                    canvas.toBlob((blob) => {
+                        if (blob) resolve(blob);
+                        else reject(new Error('Failed to create blob'));
+                    }, 'image/jpeg', 0.85);
+                });
+                
+                const file = new File([blob], 'auto_capture.jpg', { type: 'image/jpeg' });
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Send to server for face detection and verification
+                const response = await fetch('/verify_face', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                // Handle different response statuses
+                if (result.status === 'no_face') {
+                    // No face detected - keep waiting
+                    document.getElementById('verifyStatus').textContent = '👤 Đang chờ khuôn mặt...';
+                    document.getElementById('verifyStatus').style.color = '#64748b';
+                    // Clear overlay
+                    const overlay = document.getElementById('overlayCanvas');
+                    if (overlay) {
+                        const overlayCtx = overlay.getContext('2d');
+                        overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+                    }
+                } else if (result.status === 'MATCH') {
+                    // Match found
+                    const studentInfo = result.student_info || {};
+                    const name = studentInfo.name || 'Unknown';
+                    const id = studentInfo.student_id || 'Unknown';
+                    document.getElementById('verifyStatus').textContent = `✅ ${name} - ${id}`;
+                    document.getElementById('verifyStatus').style.color = '#10b981';
+                    previewImage(file, 'verifyPreview');
+                    displayVerifyResult(result);
+                    
+                    // Reset status after 5 seconds
+                    setTimeout(() => {
+                        if (isAutoDetecting) {
+                            document.getElementById('verifyStatus').textContent = '👤 Đang chờ khuôn mặt...';
+                            document.getElementById('verifyStatus').style.color = '#64748b';
+                        }
+                    }, 5000);
+                } else if (result.status === 'UNCERTAIN') {
+                    // Uncertain match
+                    document.getElementById('verifyStatus').textContent = '⚠️ Không chắc chắn';
+                    document.getElementById('verifyStatus').style.color = '#f59e0b';
+                    previewImage(file, 'verifyPreview');
+                    displayVerifyResult(result);
+                    
+                    // Reset status after 3 seconds
+                    setTimeout(() => {
+                        if (isAutoDetecting) {
+                            document.getElementById('verifyStatus').textContent = '👤 Đang chờ khuôn mặt...';
+                            document.getElementById('verifyStatus').style.color = '#64748b';
+                        }
+                    }, 3000);
+                } else {
+                    // No match found
+                    document.getElementById('verifyStatus').textContent = '❌ Không tìm thấy trong hệ thống';
+                    document.getElementById('verifyStatus').style.color = '#ef4444';
+                    displayVerifyResult(result);
+                    
+                    // Reset status after 2 seconds
+                    setTimeout(() => {
+                        if (isAutoDetecting) {
+                            document.getElementById('verifyStatus').textContent = '👤 Đang chờ khuôn mặt...';
+                            document.getElementById('verifyStatus').style.color = '#64748b';
+                        }
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Auto detect error:', error);
+                document.getElementById('verifyStatus').textContent = '⚠️ Lỗi kết nối';
+                document.getElementById('verifyStatus').style.color = '#ef4444';
+                
+                // Reset after error
+                setTimeout(() => {
+                    if (isAutoDetecting) {
+                        document.getElementById('verifyStatus').textContent = '👤 Đang chờ khuôn mặt...';
+                        document.getElementById('verifyStatus').style.color = '#64748b';
+                    }
+                }, 2000);
+            } finally {
+                isProcessing = false;
+            }
+        }
+
+        function toggleAutoDetect() {
+            if (isAutoDetecting) {
+                // Pause auto detect
+                if (autoDetectInterval) {
+                    clearInterval(autoDetectInterval);
+                    autoDetectInterval = null;
+                }
+                isAutoDetecting = false;
+                isProcessing = false;
+                document.getElementById('toggleAutoBtn').innerHTML = '<i class="fas fa-play"></i> Tiếp tục Auto Detect';
+                document.getElementById('toggleAutoBtn').className = 'btn btn-success';
+                document.getElementById('verifyStatus').textContent = '⏸️ Auto Detect đã tạm dừng';
+                document.getElementById('verifyStatus').style.color = '#64748b';
+                
+                // Clear overlay
+                const overlay = document.getElementById('overlayCanvas');
+                if (overlay) {
+                    const overlayCtx = overlay.getContext('2d');
+                    overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+                }
+            } else {
+                // Resume auto detect
+                const video = document.getElementById('video');
+                if (!video || video.readyState < 2) {
+                    alert('Vui lòng đợi camera sẵn sàng...');
+                    return;
+                }
+                
+                isAutoDetecting = true;
+                document.getElementById('toggleAutoBtn').innerHTML = '<i class="fas fa-pause"></i> Tạm dừng Auto Detect';
+                document.getElementById('toggleAutoBtn').className = 'btn btn-warning';
+                document.getElementById('verifyStatus').textContent = '🤖 Auto Detect đang chạy...';
+                document.getElementById('verifyStatus').style.color = '#6366f1';
+                
+                // Initialize overlay canvas
+                const overlay = document.getElementById('overlayCanvas');
+                if (overlay) {
+                    overlay.width = video.videoWidth;
+                    overlay.height = video.videoHeight;
+                }
+                
+                // Start detection loop - check every 2 seconds
+                setTimeout(() => {
+                    autoDetectInterval = setInterval(() => {
+                        if (isAutoDetecting && currentStream && !isProcessing) {
+                            const video = document.getElementById('video');
+                            if (video && video.readyState >= 2 && video.videoWidth > 0) {
+                                autoDetectAndVerify();
+                            }
+                        }
+                    }, 2000); // Check every 2 seconds
+                }, 500);
+            }
+        }
+
+        function addToCaptureList() {
+            captureFromCamera('register');
+        }
+
+        function displayCaptureList() {
+            const listDiv = document.getElementById('captureList');
+            const previewDiv = document.getElementById('registerPreview');
+            
+            if (capturedImages.length > 0) {
+                listDiv.innerHTML = `
+                    <div class="result-card success" style="margin-top: 1rem;">
+                        <div class="result-header">
+                            <div class="result-icon">📸</div>
+                            <div class="result-title">Đã chụp: ${capturedImages.length} ảnh</div>
+                        </div>
+                        <button class="btn btn-danger" onclick="clearCaptures()">
+                            <i class="fas fa-trash"></i> Xóa tất cả
+                        </button>
+                    </div>
+                `;
+                
+                previewDiv.innerHTML = '';
+                capturedImages.forEach((file) => {
+                    previewImage(file, 'registerPreview');
+                });
+                
+                selectedRegisterFiles = capturedImages;
+            }
+        }
+
+        function clearCaptures() {
+            capturedImages = [];
+            selectedRegisterFiles = [];
+            document.getElementById('captureList').innerHTML = '';
+            document.getElementById('registerPreview').innerHTML = '';
+        }
+
+        // Auto verify on file select
+        document.getElementById('verifyFile').addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                selectedFile = e.target.files[0];
+                previewImage(selectedFile, 'verifyPreview');
+                setTimeout(() => verifyFace(), 500);
+            }
+        });
+    </script>
+</body>
+</html>

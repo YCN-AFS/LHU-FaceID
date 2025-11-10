@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bảng điểm danh - LHU FaceID</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #8b5cf6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --gray: #64748b;
+            --border: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: var(--dark);
+            padding: 2rem;
+        }
+
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px 20px 0 0;
+            padding: 2.5rem 3rem;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .header-title h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .header-title p {
+            color: var(--gray);
+            font-size: 1rem;
+        }
+
+        .nav-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: white;
+            color: var(--primary);
+            text-decoration: none;
+            border-radius: 12px;
+            font-weight: 500;
+            transition: all 0.3s;
+            border: 2px solid var(--border);
+        }
+
+        .nav-link:hover {
+            background: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            transition: all 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .stat-card.success {
+            background: linear-gradient(135deg, var(--success) 0%, #34d399 100%);
+        }
+
+        .stat-card.warning {
+            background: linear-gradient(135deg, var(--warning) 0%, #fbbf24 100%);
+        }
+
+        .stat-card.danger {
+            background: linear-gradient(135deg, var(--danger) 0%, #f87171 100%);
+        }
+
+        .stat-card.info {
+            background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        /* Content */
+        .content {
+            background: white;
+            border-radius: 0 0 20px 20px;
+            padding: 2.5rem 3rem;
+            box-shadow: var(--shadow-lg);
+        }
+
+        /* Filters */
+        .filters {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 0.75rem 1.5rem;
+            border: 2px solid var(--border);
+            background: white;
+            color: var(--gray);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .filter-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .filter-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            box-shadow: var(--shadow);
+        }
+
+        /* Attendance List */
+        .attendance-list {
+            max-height: 600px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+
+        .attendance-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .attendance-list::-webkit-scrollbar-track {
+            background: var(--light);
+            border-radius: 4px;
+        }
+
+        .attendance-list::-webkit-scrollbar-thumb {
+            background: var(--gray);
+            border-radius: 4px;
+        }
+
+        .attendance-item {
+            display: flex;
+            align-items: center;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            background: var(--light);
+            border-radius: 16px;
+            transition: all 0.3s;
+            border-left: 4px solid var(--primary);
+            box-shadow: var(--shadow);
+        }
+
+        .attendance-item:hover {
+            background: white;
+            transform: translateX(8px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .attendance-item.success {
+            border-left-color: var(--success);
+        }
+
+        .attendance-item.uncertain {
+            border-left-color: var(--warning);
+        }
+
+        .attendance-item.failed {
+            border-left-color: var(--danger);
+        }
+
+        .item-avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-right: 1.5rem;
+            flex-shrink: 0;
+            box-shadow: var(--shadow);
+        }
+
+        .item-info {
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        .item-info h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .item-info p {
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+
+        .item-time {
+            text-align: right;
+            flex-shrink: 0;
+            margin-left: 1rem;
+        }
+
+        .item-time .time {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 0.25rem;
+        }
+
+        .item-time .date {
+            font-size: 0.85rem;
+            color: var(--gray);
+            margin-bottom: 0.25rem;
+        }
+
+        .item-time .confidence {
+            font-size: 0.9rem;
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        /* Refresh Button */
+        .refresh-btn {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: var(--shadow-lg);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .refresh-btn:hover {
+            transform: scale(1.1) rotate(180deg);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+        }
+
+        .refresh-btn.loading {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--gray);
+        }
+
+        .empty-icon {
+            font-size: 5rem;
+            margin-bottom: 1.5rem;
+            opacity: 0.5;
+        }
+
+        .empty-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--dark);
+        }
+
+        .empty-text {
+            font-size: 1rem;
+        }
+
+        /* Loading */
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 3rem auto;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1.5rem;
+            }
+
+            .content {
+                padding: 1.5rem;
+            }
+
+            .attendance-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .item-time {
+                text-align: left;
+                margin-left: 0;
+                margin-top: 1rem;
+                width: 100%;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-top">
+                <div class="header-title">
+                    <h1><i class="fas fa-calendar-check"></i> Bảng Điểm Danh</h1>
+                    <p>Hôm nay: <span id="currentDate"></span></p>
+                </div>
+                <a href="/" class="nav-link">
+                    <i class="fas fa-home"></i> Trang chủ
+                </a>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card info">
+                    <div class="stat-value" id="totalAttempts">0</div>
+                    <div class="stat-label">Tổng lần thử</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-value" id="successful">0</div>
+                    <div class="stat-label">Thành công</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-value" id="uncertain">0</div>
+                    <div class="stat-label">Cần kiểm tra</div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-value" id="failed">0</div>
+                    <div class="stat-label">Thất bại</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="avgConfidence">0%</div>
+                    <div class="stat-label">Độ tin cậy TB</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <!-- Filters -->
+            <div class="filters">
+                <button class="filter-btn active" onclick="filterAttendance('all')">
+                    <i class="fas fa-list"></i> Tất cả
+                </button>
+                <button class="filter-btn" onclick="filterAttendance('success')">
+                    <i class="fas fa-check-circle"></i> Thành công
+                </button>
+                <button class="filter-btn" onclick="filterAttendance('uncertain')">
+                    <i class="fas fa-exclamation-triangle"></i> Cần kiểm tra
+                </button>
+                <button class="filter-btn" onclick="filterAttendance('failed')">
+                    <i class="fas fa-times-circle"></i> Thất bại
+                </button>
+            </div>
+
+            <!-- Attendance List -->
+            <div class="attendance-list" id="attendanceList">
+                <div class="loader"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Refresh Button -->
+    <button class="refresh-btn" onclick="loadAttendance()" id="refreshBtn">
+        <i class="fas fa-sync-alt"></i>
+    </button>
+
+    <script>
+        let currentFilter = 'all';
+        let allRecords = [];
+
+        // Display current date
+        document.getElementById('currentDate').textContent = new Date().toLocaleDateString('vi-VN', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+
+        async function loadAttendance() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.classList.add('loading');
+            
+            try {
+                const response = await fetch('/get_today_attendance');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    allRecords = data.attendance;
+                    updateStats(data.stats);
+                    displayAttendance();
+                } else {
+                    showError('Không thể tải dữ liệu');
+                }
+            } catch (error) {
+                console.error('Error loading attendance:', error);
+                showError('Lỗi kết nối');
+            } finally {
+                refreshBtn.classList.remove('loading');
+            }
+        }
+
+        function updateStats(stats) {
+            document.getElementById('totalAttempts').textContent = stats.total_attempts || 0;
+            document.getElementById('successful').textContent = stats.successful || 0;
+            document.getElementById('uncertain').textContent = stats.uncertain || 0;
+            document.getElementById('failed').textContent = stats.failed || 0;
+            document.getElementById('avgConfidence').textContent = (stats.average_confidence || 0).toFixed(1) + '%';
+        }
+
+        function filterAttendance(filter) {
+            currentFilter = filter;
+            
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            displayAttendance();
+        }
+
+        function displayAttendance() {
+            const list = document.getElementById('attendanceList');
+            
+            let filteredRecords = allRecords;
+            if (currentFilter !== 'all') {
+                filteredRecords = allRecords.filter(r => r.status === currentFilter);
+            }
+            
+            if (filteredRecords.length === 0) {
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📊</div>
+                        <div class="empty-title">Không có dữ liệu</div>
+                        <div class="empty-text">${currentFilter === 'all' ? 'Chưa có bản ghi điểm danh nào hôm nay' : `Không có bản ghi với trạng thái "${currentFilter}"`}</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            list.innerHTML = filteredRecords.map(record => {
+                const statusClass = record.status;
+                const statusIcon = {
+                    'success': '✅',
+                    'uncertain': '⚠️',
+                    'failed': '❌'
+                };
+                
+                const date = new Date(record.checkin_time);
+                const time = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                const dateStr = date.toLocaleDateString('vi-VN');
+                const confidence = ((record.confidence || 0) * 100).toFixed(1);
+                
+                const initial = record.student_name ? record.student_name.charAt(0).toUpperCase() : '?';
+                
+                return `
+                    <div class="attendance-item ${statusClass}">
+                        <div class="item-avatar">${initial}</div>
+                        <div class="item-info">
+                            <h3>${record.student_name || 'Unknown'} ${statusIcon[statusClass] || ''}</h3>
+                            <p><i class="fas fa-id-card"></i> Mã: ${record.student_id || 'N/A'} | <i class="fas fa-users"></i> Lớp: ${record.class || 'N/A'}</p>
+                        </div>
+                        <div class="item-time">
+                            <div class="time">${time}</div>
+                            <div class="date">${dateStr}</div>
+                            <div class="confidence">${confidence}% tin cậy</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showError(message) {
+            document.getElementById('attendanceList').innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">⚠️</div>
+                    <div class="empty-title">Lỗi</div>
+                    <div class="empty-text">${message}</div>
+                </div>
+            `;
+        }
+
+        // Load data on page load
+        loadAttendance();
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadAttendance, 30000);
+    </script>
+</body>
+</html>

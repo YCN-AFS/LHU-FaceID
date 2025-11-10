@@ -1,0 +1,46 @@
+# LHU FaceID Configuration
+
+# Face Recognition Thresholds
+threshold:
+  match: 0.45      # Cosine similarity threshold for MATCH
+  uncertain: 0.35  # Cosine similarity threshold for UNCERTAIN
+  # Scores:
+  #   >= 0.45 → MATCH
+  #   0.35-0.45 → UNCERTAIN
+  #   < 0.35 → NO_MATCH
+
+# MTCNN Face Detection
+face_detection:
+  min_face_size: 40
+  scale_factor: 0.709
+  threshold: [0.6, 0.7, 0.7]  # P-net, R-net, O-net thresholds
+
+# ArcFace Model
+arcface:
+  model_path: "models/ms1mv3_arcface_r50_v2.onnx"  # Will use default model
+  input_size: [112, 112]  # Input image size for ArcFace
+  embedding_dim: 512      # Embedding dimensions
+
+# Cassandra Database
+cassandra:
+  hosts:
+    - "127.0.0.1"
+  port: 9042
+  keyspace: "lhu_faceid"
+  replication:
+    class: "SimpleStrategy"
+    replication_factor: 1
+
+# Logging
+logging:
+  level: "INFO"
+  format: "{time} | {level} | {name}:{function} | {message}"
+  rotation: "100 MB"
+  retention: "10 days"
+
+# API Settings
+api:
+  host: "0.0.0.0"
+  port: 8000
+  reload: true
+
