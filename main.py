@@ -196,6 +196,12 @@ async def verify_face(file: UploadFile = File(...)):
         # Read image
         image = read_image(file)
         
+        # Save image bytes for logging
+        import cv2
+        import io
+        _, buffer = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        image_bytes = buffer.tobytes()
+        
         # Detect face
         face = face_detector.detect_face(image)
         if face is None:
@@ -239,9 +245,9 @@ async def verify_face(file: UploadFile = File(...)):
         attendance_logger = AttendanceLogger(db.session)
         
         if match is None or match['status'] == 'NO_MATCH':
-            # Log failed recognition
+            # Log failed recognition with image
             if match:
-                attendance_logger.log_failed_recognition(match['similarity'])
+                attendance_logger.log_failed_recognition(match['similarity'], checkin_image=image_bytes)
             
             return JSONResponse(
                 content={
@@ -253,14 +259,15 @@ async def verify_face(file: UploadFile = File(...)):
                 status_code=200
             )
         
-        # Log successful/uncertain recognition
+        # Log successful/uncertain recognition with image
         attendance_logger.log_checkin(
             match['student_id'],
             match['name'],
             match['class'],
             match['similarity'],
             location="main_gate",
-            status='success' if match['status'] == 'MATCH' else 'uncertain'
+            status='success' if match['status'] == 'MATCH' else 'uncertain',
+            checkin_image=image_bytes
         )
         
         # Update check-in time if matched
@@ -379,6 +386,47 @@ async def get_today_attendance():
         
     except Exception as e:
         logger.error(f"Error in get_today_attendance: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@app.get("/get_checkin_image/{log_id}")
+async def get_checkin_image(log_id: str):
+    """
+    Get check-in image by log_id.
+    
+    Args:
+        log_id: Attendance log ID
+        
+    Returns:
+        Image file
+    """
+    try:
+        from uuid import UUID
+        from fastapi.responses import Response
+        
+        # Query database for image
+        cql = """
+        SELECT checkin_image
+        FROM attendance_logs
+        WHERE log_id = ?
+        """
+        
+        prepared = db.session.prepare(cql)
+        result = db.session.execute(prepared, [UUID(log_id)]).one()
+        
+        if result is None or not hasattr(result, 'checkin_image') or result.checkin_image is None:
+            raise HTTPException(status_code=404, detail="Image not found")
+        
+        # Return image
+        return Response(
+            content=result.checkin_image,
+            media_type="image/jpeg"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting checkin image: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
