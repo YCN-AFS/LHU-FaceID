@@ -441,6 +441,82 @@
             color: var(--gray);
         }
 
+        /* Preview Images */
+        .preview-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .preview-image {
+            position: relative;
+            max-width: 150px;
+            max-height: 150px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        .preview-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Upload Area */
+        .upload-area {
+            border: 3px dashed var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            background: var(--light);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .upload-area.dragover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        .upload-text {
+            color: var(--gray);
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        /* Video Container */
+        .video-container {
+            position: relative;
+            max-width: 500px;
+            margin: 0 auto;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .video-container video {
+            width: 100%;
+            display: block;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             body {
@@ -470,6 +546,10 @@
 
             .students-table {
                 min-width: 800px;
+            }
+
+            .action-buttons {
+                flex-direction: column;
             }
         }
     </style>
@@ -550,6 +630,77 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Update Photo Modal -->
+    <div id="updatePhotoModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h2><i class="fas fa-camera"></i> Cập nhật ảnh sinh viên</h2>
+                <button class="modal-close" onclick="closeUpdatePhotoModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div>
+                <div class="form-group">
+                    <label class="form-label">Sinh viên</label>
+                    <input type="text" id="updatePhotoStudentId" class="form-input" readonly>
+                    <small style="color: var(--gray); margin-top: 0.5rem; display: block;" id="updatePhotoStudentName"></small>
+                </div>
+
+                <div class="btn-group" style="margin: 1.5rem 0;">
+                    <button type="button" class="btn btn-primary" onclick="openCameraForUpdate()" id="openCameraUpdateBtn">
+                        <i class="fas fa-video"></i> Mở Camera
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="closeCameraForUpdate()" id="closeCameraUpdateBtn" style="display: none;">
+                        <i class="fas fa-stop"></i> Đóng Camera
+                    </button>
+                </div>
+
+                <div id="videoContainerUpdate" style="display: none; margin-bottom: 1.5rem;">
+                    <div class="video-container" style="max-width: 500px; margin: 0 auto;">
+                        <video id="videoUpdate" autoplay playsinline style="width: 100%; border-radius: 12px;"></video>
+                    </div>
+                    <div class="btn-group" style="margin-top: 1rem;">
+                        <button type="button" class="btn btn-success" onclick="captureFromCameraForUpdate()">
+                            <i class="fas fa-camera"></i> Chụp ảnh
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="addToUpdateCaptureList()">
+                            <i class="fas fa-plus"></i> Thêm vào danh sách
+                        </button>
+                    </div>
+                    <div id="updateCaptureList" style="margin-top: 1rem;"></div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Upload ảnh mới (Khuyến nghị: 3-5 ảnh)</label>
+                    <div class="upload-area" onclick="document.getElementById('updatePhotoFile').click()" 
+                         ondrop="handleDropUpdate(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" style="padding: 2rem;">
+                        <div class="upload-icon" style="font-size: 3rem;">
+                            <i class="fas fa-images"></i>
+                        </div>
+                        <div class="upload-text">Kéo thả ảnh vào đây hoặc click để chọn</div>
+                        <div style="color: var(--gray); font-size: 0.9rem; margin-top: 0.5rem;">
+                            Giữ Ctrl để chọn nhiều ảnh
+                        </div>
+                        <input type="file" id="updatePhotoFile" class="file-input" accept="image/*" multiple onchange="handleFileSelectUpdate(event)">
+                    </div>
+                </div>
+
+                <div id="updatePhotoPreview" class="preview-container" style="margin: 1.5rem 0;"></div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn" onclick="closeUpdatePhotoModal()" style="flex: 1; background: var(--light); color: var(--dark);">
+                        <i class="fas fa-times"></i> Hủy
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="updateStudentPhoto()" id="updatePhotoBtn" style="flex: 1;">
+                        <i class="fas fa-save"></i> Cập nhật ảnh
+                    </button>
+                </div>
+
+                <div id="updatePhotoResult" style="margin-top: 1.5rem;"></div>
+            </div>
         </div>
     </div>
 
@@ -635,6 +786,9 @@
                             <div class="action-buttons">
                                 <button class="action-btn action-btn-edit" onclick="editStudent('${student.student_id}', '${(student.name || '').replace(/'/g, "\\'")}', '${(student.class || '').replace(/'/g, "\\'")}')">
                                     <i class="fas fa-edit"></i> Sửa
+                                </button>
+                                <button class="action-btn" onclick="openUpdatePhotoModal('${student.student_id}', '${(student.name || '').replace(/'/g, "\\'")}')" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                                    <i class="fas fa-camera"></i> Cập nhật ảnh
                                 </button>
                                 <button class="action-btn action-btn-delete" onclick="deleteStudent('${student.student_id}')">
                                     <i class="fas fa-trash"></i> Xóa
@@ -738,6 +892,271 @@
         document.getElementById('editModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeEditModal();
+            }
+        });
+
+        // Update Photo Modal Functions
+        let updatePhotoFiles = [];
+        let updateCapturedImages = [];
+        let updatePhotoStream = null;
+
+        function openUpdatePhotoModal(studentId, studentName) {
+            document.getElementById('updatePhotoStudentId').value = studentId;
+            document.getElementById('updatePhotoStudentName').textContent = studentName;
+            document.getElementById('updatePhotoModal').classList.add('active');
+            updatePhotoFiles = [];
+            updateCapturedImages = [];
+            document.getElementById('updatePhotoPreview').innerHTML = '';
+            document.getElementById('updatePhotoFile').value = '';
+            document.getElementById('updatePhotoResult').innerHTML = '';
+        }
+
+        function closeUpdatePhotoModal() {
+            document.getElementById('updatePhotoModal').classList.remove('active');
+            
+            // Close camera if open
+            if (updatePhotoStream) {
+                updatePhotoStream.getTracks().forEach(track => track.stop());
+                updatePhotoStream = null;
+            }
+            document.getElementById('videoContainerUpdate').style.display = 'none';
+            document.getElementById('openCameraUpdateBtn').style.display = 'inline-flex';
+            document.getElementById('closeCameraUpdateBtn').style.display = 'none';
+            document.getElementById('videoUpdate').srcObject = null;
+            
+            // Reset
+            updatePhotoFiles = [];
+            updateCapturedImages = [];
+        }
+
+        async function openCameraForUpdate() {
+            try {
+                const constraints = {
+                    video: { 
+                        facingMode: 'user',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    }
+                };
+                
+                updatePhotoStream = await navigator.mediaDevices.getUserMedia(constraints);
+                document.getElementById('videoUpdate').srcObject = updatePhotoStream;
+                document.getElementById('videoContainerUpdate').style.display = 'block';
+                document.getElementById('openCameraUpdateBtn').style.display = 'none';
+                document.getElementById('closeCameraUpdateBtn').style.display = 'inline-flex';
+            } catch (error) {
+                alert('Không thể truy cập camera: ' + error.message);
+            }
+        }
+
+        function closeCameraForUpdate() {
+            if (updatePhotoStream) {
+                updatePhotoStream.getTracks().forEach(track => track.stop());
+                updatePhotoStream = null;
+            }
+            document.getElementById('videoContainerUpdate').style.display = 'none';
+            document.getElementById('openCameraUpdateBtn').style.display = 'inline-flex';
+            document.getElementById('closeCameraUpdateBtn').style.display = 'none';
+            document.getElementById('videoUpdate').srcObject = null;
+        }
+
+        function captureFromCameraForUpdate() {
+            const video = document.getElementById('videoUpdate');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            
+            canvas.toBlob(function(blob) {
+                const file = new File([blob], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
+                updateCapturedImages.push(file);
+                displayUpdateCaptureList();
+            }, 'image/jpeg', 0.95);
+        }
+
+        function addToUpdateCaptureList() {
+            captureFromCameraForUpdate();
+        }
+
+        function displayUpdateCaptureList() {
+            const listDiv = document.getElementById('updateCaptureList');
+            const previewDiv = document.getElementById('updatePhotoPreview');
+            
+            if (updateCapturedImages.length > 0) {
+                listDiv.innerHTML = `
+                    <div style="background: #e8f5e9; padding: 1rem; border-radius: 12px; margin-top: 1rem;">
+                        <p style="margin-bottom: 0.5rem; font-weight: 600; color: var(--success);">
+                            <i class="fas fa-camera"></i> Đã chụp: ${updateCapturedImages.length} ảnh
+                        </p>
+                        <button class="btn btn-danger" onclick="clearUpdateCaptures()" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                            <i class="fas fa-trash"></i> Xóa tất cả
+                        </button>
+                    </div>
+                `;
+                
+                // Update preview
+                updatePhotoFiles = [...updateCapturedImages];
+                previewMultipleImagesForUpdate(updatePhotoFiles);
+            }
+        }
+
+        function clearUpdateCaptures() {
+            // Remove captured images from updatePhotoFiles
+            updatePhotoFiles = updatePhotoFiles.filter(f => !updateCapturedImages.includes(f));
+            updateCapturedImages = [];
+            document.getElementById('updateCaptureList').innerHTML = '';
+            
+            // Update preview
+            if (updatePhotoFiles.length === 0) {
+                document.getElementById('updatePhotoPreview').innerHTML = '';
+            } else {
+                previewMultipleImagesForUpdate(updatePhotoFiles);
+            }
+        }
+
+        function handleDropUpdate(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length > 0) {
+                updatePhotoFiles = [...updateCapturedImages, ...files];
+                previewMultipleImagesForUpdate(updatePhotoFiles);
+            }
+        }
+
+        function handleFileSelectUpdate(e) {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                updatePhotoFiles = [...updateCapturedImages, ...files];
+                previewMultipleImagesForUpdate(updatePhotoFiles);
+            }
+        }
+
+        function previewMultipleImagesForUpdate(files) {
+            const container = document.getElementById('updatePhotoPreview');
+            container.innerHTML = '';
+            
+            files.forEach((file) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const div = document.createElement('div');
+                    div.className = 'preview-image';
+                    div.style.position = 'relative';
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    div.appendChild(img);
+                    
+                    // Add remove button
+                    const removeBtn = document.createElement('button');
+                    removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                    removeBtn.style.cssText = 'position: absolute; top: 5px; right: 5px; background: var(--danger); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.8rem;';
+                    removeBtn.onclick = function() {
+                        // Remove this specific file
+                        const index = updatePhotoFiles.indexOf(file);
+                        if (index > -1) {
+                            updatePhotoFiles.splice(index, 1);
+                        }
+                        // Also remove from captured images if it's a captured image
+                        const capturedIndex = updateCapturedImages.indexOf(file);
+                        if (capturedIndex > -1) {
+                            updateCapturedImages.splice(capturedIndex, 1);
+                        }
+                        // Refresh preview
+                        previewMultipleImagesForUpdate(updatePhotoFiles);
+                        // Update capture list display
+                        if (updateCapturedImages.length > 0) {
+                            displayUpdateCaptureList();
+                        } else {
+                            document.getElementById('updateCaptureList').innerHTML = '';
+                        }
+                    };
+                    div.appendChild(removeBtn);
+                    
+                    container.appendChild(div);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function updateStudentPhoto() {
+            const studentId = document.getElementById('updatePhotoStudentId').value;
+            
+            if (updatePhotoFiles.length === 0) {
+                alert('Vui lòng chọn ít nhất 1 ảnh!');
+                return;
+            }
+            
+            const btn = document.getElementById('updatePhotoBtn');
+            const result = document.getElementById('updatePhotoResult');
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loader" style="width: 20px; height: 20px; border-width: 2px; margin: 0;"></div> Đang cập nhật...';
+            result.innerHTML = '<div class="loader"></div>';
+            
+            const formData = new FormData();
+            updatePhotoFiles.forEach(file => formData.append('files', file));
+            
+            try {
+                const response = await fetch(`/update_student_photo/${studentId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'success') {
+                    result.innerHTML = `
+                        <div class="result-card success" style="padding: 1.5rem; border-radius: 12px; background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border: 2px solid var(--success);">
+                            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                                <div style="font-size: 2rem;">✅</div>
+                                <div>
+                                    <div style="font-size: 1.25rem; font-weight: 700; color: var(--dark);">Cập nhật ảnh thành công!</div>
+                                    <div style="color: var(--gray); font-size: 0.9rem;">Đã cập nhật ${data.images_count || updatePhotoFiles.length} ảnh</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Reset after 2 seconds
+                    setTimeout(() => {
+                        closeUpdatePhotoModal();
+                        loadStudents();
+                    }, 2000);
+                } else {
+                    result.innerHTML = `
+                        <div class="result-card error" style="padding: 1.5rem; border-radius: 12px; background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border: 2px solid var(--danger);">
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <div style="font-size: 2rem;">❌</div>
+                                <div>
+                                    <div style="font-size: 1.25rem; font-weight: 700; color: var(--dark);">Lỗi!</div>
+                                    <div style="color: var(--gray);">${data.detail || data.message || "Unknown error"}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                result.innerHTML = `
+                    <div class="result-card error" style="padding: 1.5rem; border-radius: 12px; background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border: 2px solid var(--danger);">
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <div style="font-size: 2rem;">❌</div>
+                            <div>
+                                <div style="font-size: 1.25rem; font-weight: 700; color: var(--dark);">Lỗi!</div>
+                                <div style="color: var(--gray);">${error.message}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Cập nhật ảnh';
+        }
+
+        // Close update photo modal on outside click
+        document.getElementById('updatePhotoModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeUpdatePhotoModal();
             }
         });
 
