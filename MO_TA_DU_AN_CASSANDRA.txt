@@ -1,0 +1,405 @@
+================================================================================
+MÔ TẢ DỰ ÁN: HỆ THỐNG NHẬN DIỆN KHUÔN MẶT SINH VIÊN SỬ DỤNG APACHE CASSANDRA
+================================================================================
+
+Dự án LHU FaceID là hệ thống điểm danh tự động sử dụng nhận diện khuôn mặt, 
+lưu trữ và xử lý dữ liệu real-time với Apache Cassandra. Hệ thống xử lý 
+ảnh khuôn mặt từ camera, trích xuất đặc trưng bằng Machine Learning, và 
+lưu trữ vào Cassandra để truy vấn nhanh.
+
+================================================================================
+CK01: PIPELINE XỬ LÝ DỮ LIỆU VỚI CASSANDRA
+================================================================================
+
+Luồng dữ liệu chính của hệ thống:
+
+1. ĐĂNG KÝ SINH VIÊN (Write Pipeline):
+   - Người dùng upload nhiều ảnh khuôn mặt qua API FastAPI (/register_face)
+   - Ảnh được xử lý tuần tự: MTCNN phát hiện khuôn mặt → ArcFace trích xuất 
+     embedding 512 chiều
+   - Nhiều embedding được lọc outlier và tính trung bình để tạo embedding đại diện
+   - Dữ liệu được chuẩn bị: student_id (TEXT), name (TEXT), class (TEXT), 
+     embedding (BLOB), timestamps
+   - Ghi vào bảng 'students' trong Cassandra keyspace 'lhu_faceid' bằng CQL INSERT
+   - Sử dụng prepared statements để tối ưu hiệu suất
+
+2. XÁC THỰC KHUÔN MẶT (Read-Write Pipeline):
+   - Ảnh check-in được upload qua API (/verify_face)
+   - Trích xuất embedding từ ảnh mới (cùng pipeline MTCNN + ArcFace)
+   - Đọc toàn bộ sinh viên từ Cassandra: SELECT * FROM students
+   - So khớp embedding bằng cosine similarity với tất cả embeddings trong DB
+   - Tìm match tốt nhất và xác định trạng thái: MATCH (≥0.45), UNCERTAIN (0.35-0.45), 
+     NO_MATCH (<0.35)
+   - Ghi log điểm danh vào bảng 'attendance_logs' với thông tin: log_id (UUID), 
+     student_id, checkin_time, confidence_score, status, checkin_image_path
+   - Cập nhật last_checkin_time trong bảng students nếu MATCH
+
+3. TRUY VẤN DỮ LIỆU:
+   - Lấy thông tin sinh viên: SELECT WHERE student_id = ? (primary key lookup)
+   - Lấy điểm danh hôm nay: SELECT WHERE checkin_time >= ? ALLOW FILTERING
+   - Lấy lịch sử điểm danh: SELECT WHERE student_id = ? AND checkin_time >= ? 
+     ALLOW FILTERING
+
+Công cụ sử dụng:
+- FastAPI: API server xử lý HTTP requests
+- Cassandra Python Driver: Kết nối và thực thi CQL queries
+- Prepared Statements: Tối ưu hiệu suất cho queries lặp lại
+
+================================================================================
+CK02: THIẾT KẾ MÔ HÌNH DỮ LIỆU
+================================================================================
+
+Keyspace: lhu_faceid
+Replication: SimpleStrategy với replication_factor = 1
+
+1. BẢNG STUDENTS:
+   - Mục đích: Lưu thông tin sinh viên và face embedding
+   - Primary Key: student_id (TEXT) - partition key duy nhất
+   - Các cột:
+     * student_id TEXT PRIMARY KEY
+     * name TEXT
+     * class TEXT (dùng quotes vì là keyword trong CQL)
+     * embedding BLOB (lưu numpy array 512 float32 dưới dạng bytes)
+     * last_checkin_time TIMESTAMP
+     * created_at TIMESTAMP
+   
+   - Thiết kế: Mỗi sinh viên một partition, truy vấn nhanh theo student_id
+   - Không có clustering key vì chỉ cần lookup theo ID
+
+2. BẢNG ATTENDANCE_LOGS:
+   - Mục đích: Lưu log điểm danh real-time
+   - Primary Key: log_id (UUID) - partition key
+   - Các cột:
+     * log_id UUID PRIMARY KEY
+     * student_id TEXT
+     * student_name TEXT
+     * class TEXT
+     * checkin_time TIMESTAMP
+     * location TEXT
+     * confidence_score FLOAT
+     * status TEXT (success/uncertain/failed)
+     * face_detected BOOLEAN
+     * checkin_image_path TEXT (đường dẫn file ảnh)
+   
+   - Thiết kế: Mỗi log một partition riêng (UUID), cho phép ghi song song
+   - Truy vấn theo thời gian dùng ALLOW FILTERING (phù hợp với dữ liệu time-series)
+   - Có thể mở rộng: thêm clustering key (checkin_time) nếu cần query theo range
+
+Lý do thiết kế:
+- students: Tối ưu cho lookup theo ID (O(1) với partition key)
+- attendance_logs: Tối ưu cho write throughput (mỗi log một partition)
+- Embedding lưu BLOB để tránh serialize/deserialize phức tạp
+
+================================================================================
+CK03: LƯU TRỮ DỮ LIỆU SEMI/UNSTRUCTURED
+================================================================================
+
+Hệ thống lưu trữ các loại dữ liệu semi-structured và unstructured:
+
+1. EMBEDDING VECTORS (Unstructured):
+   - Format: NumPy array 512 chiều (float32) → chuyển thành BLOB
+   - Lưu trong cột 'embedding' của bảng students
+   - Quy trình: numpy.ndarray.tobytes() → BLOB → np.frombuffer() khi đọc
+   - Lý do: Embedding là vector số thực, không có cấu trúc cố định
+
+2. LOG RECORDS (Semi-structured):
+   - Format: JSON-like structure trong các cột riêng biệt
+   - Lưu trong bảng attendance_logs với các trường:
+     * Metadata: log_id, checkin_time, location
+     * Student info: student_id, student_name, class
+     * Recognition results: confidence_score, status, face_detected
+     * File reference: checkin_image_path
+   - Có thể mở rộng: thêm cột JSON TEXT để lưu metadata động
+
+3. IMAGE FILE PATHS (Unstructured reference):
+   - Lưu đường dẫn file ảnh trong checkin_image_path (TEXT)
+   - Ảnh thực tế lưu trên filesystem (checkin_images/)
+   - Cho phép truy xuất ảnh gốc để kiểm tra/audit
+
+4. CONFIGURATION DATA:
+   - File config.yaml lưu cấu hình: thresholds, model paths, DB settings
+   - Có thể migrate vào Cassandra nếu cần distributed config
+
+Ưu điểm:
+- BLOB cho embedding: Hiệu suất cao, không mất độ chính xác
+- Separate columns cho logs: Dễ query và index
+- File paths: Tách biệt storage, giảm tải cho database
+
+================================================================================
+CK04: XỬ LÝ DỮ LIỆU STREAMING VÀ REAL-TIME
+================================================================================
+
+Hệ thống xử lý dữ liệu streaming real-time qua FastAPI:
+
+1. STREAMING INPUT:
+   - API endpoint /verify_face nhận ảnh qua HTTP POST (multipart/form-data)
+   - FastAPI xử lý async, cho phép nhiều requests đồng thời
+   - Ảnh được đọc vào memory (BytesIO) và decode bằng OpenCV
+   - Không cần Kafka vì throughput vừa phải, FastAPI đủ xử lý
+
+2. REAL-TIME PROCESSING:
+   - Mỗi ảnh được xử lý ngay lập tức:
+     a) Face detection (MTCNN): ~50-100ms
+     b) Embedding extraction (ArcFace): ~50-100ms
+     c) Database query: SELECT all students (~10-50ms)
+     d) Matching: Cosine similarity với tất cả embeddings (~5-10ms)
+     e) Logging: INSERT vào attendance_logs (~10-20ms)
+   - Tổng thời gian: ~150-300ms per request (CPU) hoặc ~50-100ms (GPU)
+
+3. REAL-TIME WRITE TO CASSANDRA:
+   - Mỗi check-in event được ghi ngay vào attendance_logs
+   - Sử dụng prepared statements để tối ưu
+   - UUID làm partition key cho phép ghi song song không conflict
+   - Không cần batching vì latency quan trọng hơn throughput
+
+4. QUERY REAL-TIME:
+   - API /get_today_attendance query Cassandra real-time
+   - Sử dụng ALLOW FILTERING để lọc theo checkin_time
+   - Kết quả được sort và trả về ngay cho dashboard
+
+Mở rộng có thể:
+- Thêm Kafka nếu cần xử lý hàng nghìn requests/giây
+- Spark Streaming để aggregate statistics real-time
+- Materialized views cho pre-computed statistics
+
+================================================================================
+CK05: TIỀN XỬ LÝ DỮ LIỆU
+================================================================================
+
+Các bước tiền xử lý trước khi lưu vào Cassandra:
+
+1. XỬ LÝ ẢNH ĐẦU VÀO:
+   - Đọc ảnh từ bytes: np.frombuffer() → cv2.imdecode()
+   - Validate format: Kiểm tra ảnh hợp lệ, không None
+   - Convert color space: BGR → RGB cho MTCNN và ArcFace
+   - Resize nếu cần: ArcFace yêu cầu 112x112 pixels
+
+2. PHÁT HIỆN KHUÔN MẶT:
+   - MTCNN detect faces với thresholds: [0.6, 0.7, 0.7]
+   - Lọc kết quả: Chỉ lấy face đầu tiên nếu nhiều faces
+   - Crop và padding: Mở rộng bounding box 20% để capture đầy đủ
+   - Validate: Kiểm tra face_crop không rỗng
+
+3. TRÍCH XUẤT EMBEDDING:
+   - Resize face về 112x112 (yêu cầu của ArcFace)
+   - Normalize pixel values: RGB [0-255] → [0-1] (tự động trong InsightFace)
+   - Extract 512-dim embedding từ ArcFace model
+   - Normalize vector: L2 normalization (embedding / ||embedding||)
+
+4. XỬ LÝ NHIỀU ẢNH (Multi-image training):
+   - Filter outliers: Loại bỏ embeddings có cosine similarity < 0.3 với centroid
+   - Compute average: Tính trung bình các embeddings còn lại
+   - Normalize lại: Đảm bảo embedding cuối cùng có ||embedding|| = 1
+
+5. CHUẨN HÓA DỮ LIỆU:
+   - student_id: Trim whitespace, validate format
+   - name: Title case, trim whitespace
+   - class: Uppercase, trim whitespace
+   - embedding: Convert numpy array → bytes (float32, little-endian)
+   - timestamps: datetime.now() → TIMESTAMP format của Cassandra
+
+6. VALIDATION:
+   - Kiểm tra embedding không None và có shape (512,)
+   - Kiểm tra student_id không trùng (có thể update thay vì insert)
+   - Validate confidence scores trong range [0, 1]
+
+Kết quả: Dữ liệu sạch, chuẩn hóa, sẵn sàng lưu vào Cassandra
+
+================================================================================
+CK06: TÍCH HỢP MACHINE LEARNING
+================================================================================
+
+Hệ thống sử dụng ML models và lấy dữ liệu từ Cassandra để cải thiện:
+
+1. MODELS SỬ DỤNG:
+   - MTCNN: Face detection (pre-trained, không train)
+   - ArcFace: Face embedding extraction (pre-trained, không train)
+   - Face Matching: Cosine similarity (không cần train, chỉ tính toán)
+
+2. TRAINING DATA TỪ CASSANDRA:
+   - Lấy tất cả students: SELECT student_id, embedding FROM students
+   - Deserialize embeddings: np.frombuffer(blob, dtype=np.float32)
+   - Sử dụng để so khớp real-time: Query embedding → Match với query
+
+3. CẢI THIỆN MODEL (Multi-image training):
+   - Khi đăng ký: Nhận nhiều ảnh của cùng một người
+   - Trích xuất embedding từ mỗi ảnh
+   - Filter outliers: Loại bỏ embeddings khác biệt (có thể do góc chụp, ánh sáng)
+   - Compute average embedding: Tạo embedding đại diện tốt hơn
+   - Lưu embedding trung bình vào Cassandra
+   - Kết quả: Độ chính xác tăng từ ~85% (1 ảnh) lên ~98% (5+ ảnh)
+
+4. FINE-TUNING THRESHOLDS:
+   - Phân tích confidence scores từ attendance_logs
+   - Tính statistics: mean, std của confidence scores
+   - Điều chỉnh thresholds (match, uncertain) dựa trên phân phối thực tế
+   - Lưu thresholds vào config.yaml hoặc có thể lưu vào Cassandra
+
+5. CONTINUOUS LEARNING (Mở rộng):
+   - Có thể lưu failed recognitions với embeddings
+   - Phân tích patterns: Tại sao một số faces khó nhận diện
+   - Retrain hoặc fine-tune ArcFace với dữ liệu mới (cần implementation)
+
+Quy trình:
+1. Đọc dữ liệu từ Cassandra (students table)
+2. Preprocess embeddings (normalize, filter)
+3. Sử dụng trong matching pipeline
+4. Lưu kết quả và metrics vào attendance_logs
+5. Phân tích và cải thiện thresholds
+
+================================================================================
+CK07: ĐÁNH GIÁ MÔ HÌNH VÀ LƯU KẾT QUẢ
+================================================================================
+
+Hệ thống đánh giá và lưu kết quả nhận diện vào Cassandra:
+
+1. ĐÁNH GIÁ MÔ HÌNH:
+   - Metric chính: Cosine similarity score (0-1)
+   - Thresholds:
+     * MATCH: similarity ≥ 0.45 (độ chính xác cao)
+     * UNCERTAIN: 0.35 ≤ similarity < 0.45 (cần xác minh)
+     * NO_MATCH: similarity < 0.35 (không khớp)
+   - Đánh giá real-time: Mỗi lần verify face đều tính similarity
+
+2. LƯU KẾT QUẢ VÀO CASSANDRA:
+   - Bảng attendance_logs lưu đầy đủ thông tin:
+     * log_id: UUID (unique identifier)
+     * student_id, student_name, class: Thông tin sinh viên (nếu match)
+     * checkin_time: TIMESTAMP (thời điểm check-in)
+     * confidence_score: FLOAT (similarity score)
+     * status: TEXT (success/uncertain/failed)
+     * checkin_image_path: TEXT (đường dẫn ảnh để audit)
+   
+   - Mỗi lần verify đều ghi log, kể cả failed recognition
+   - Failed recognition: student_id = NULL, status = 'failed'
+
+3. THỐNG KÊ VÀ ĐÁNH GIÁ:
+   - API /get_today_attendance trả về statistics:
+     * total_attempts: Tổng số lần thử
+     * successful: Số lần thành công
+     * uncertain: Số lần không chắc chắn
+     * failed: Số lần thất bại
+     * success_rate: Tỷ lệ thành công (%)
+     * average_confidence: Độ tin cậy trung bình
+   
+   - Tính toán từ dữ liệu trong attendance_logs
+   - Real-time: Query và aggregate mỗi khi gọi API
+
+4. THEO DÕI HIỆU SUẤT:
+   - Lưu confidence scores để phân tích distribution
+   - Có thể query: SELECT confidence_score, status FROM attendance_logs
+   - Phân tích: Tại sao một số recognitions có confidence thấp
+   - Cải thiện: Điều chỉnh thresholds hoặc retrain với dữ liệu mới
+
+5. AUDIT TRAIL:
+   - Mỗi log có checkin_image_path để xem lại ảnh gốc
+   - Timestamp chính xác đến millisecond
+   - Location tracking (hiện tại: "main_gate", có thể mở rộng)
+
+Kết quả:
+- Tất cả recognitions đều được log
+- Có thể phân tích hiệu suất theo thời gian
+- Dễ dàng audit và debug
+- Dữ liệu sẵn sàng cho reporting
+
+================================================================================
+CK08: BÁO CÁO VÀ TRỰC QUAN HÓA DỮ LIỆU
+================================================================================
+
+Hệ thống cung cấp dashboard và API để báo cáo, trực quan hóa:
+
+1. WEB DASHBOARD:
+   - Template HTML: templates/attendance.html
+   - Hiển thị real-time: Gọi API /get_today_attendance mỗi vài giây
+   - Statistics cards:
+     * Tổng số lần điểm danh
+     * Số lần thành công
+     * Số lần không chắc chắn
+     * Số lần thất bại
+     * Tỷ lệ thành công (%)
+     * Độ tin cậy trung bình
+   
+   - Bảng điểm danh: Hiển thị danh sách check-ins hôm nay
+     * Student ID, Tên, Lớp
+     * Thời gian check-in
+     * Confidence score
+     * Status (với màu sắc: xanh=success, vàng=uncertain, đỏ=failed)
+     * Link xem ảnh check-in
+
+2. API ENDPOINTS:
+   - GET /get_today_attendance: Trả về JSON với attendance records và stats
+   - GET /get_student_info/{student_id}: Thông tin chi tiết sinh viên
+   - GET /get_checkin_image/{log_id}: Lấy ảnh check-in để xem
+
+3. DATA VISUALIZATION (Có thể mở rộng):
+   - Hiện tại: Dashboard HTML với tables và cards
+   - Có thể thêm:
+     * Biểu đồ line chart: Số lượng check-ins theo giờ (dùng Chart.js)
+     * Biểu đồ pie chart: Phân bố status (success/uncertain/failed)
+     * Biểu đồ bar chart: Top students check-in nhiều nhất
+     * Heatmap: Check-ins theo thời gian trong ngày
+   
+   - Tools có thể dùng:
+     * Chart.js (JavaScript, client-side)
+     * Matplotlib/Seaborn (Python, server-side, export PNG)
+     * Plotly (Interactive charts)
+
+4. EXPORT DỮ LIỆU:
+   - Có thể mở rộng: Export CSV/Excel từ attendance_logs
+   - Query: SELECT * FROM attendance_logs WHERE checkin_time >= ?
+   - Format: CSV với các cột: log_id, student_id, name, class, time, confidence, status
+
+5. REAL-TIME UPDATES:
+   - Dashboard tự động refresh mỗi 5-10 giây
+   - Không cần WebSocket vì tần suất update vừa phải
+   - Có thể thêm WebSocket nếu cần real-time hơn
+
+Kết quả:
+- Dashboard trực quan, dễ theo dõi
+- Statistics real-time
+- Dữ liệu có thể export để phân tích sâu hơn
+- Sẵn sàng mở rộng với charts nếu cần
+
+================================================================================
+KẾT LUẬN
+================================================================================
+
+TÓM TẮT GIẢI PHÁP:
+
+1. DỮ LIỆU ĐẦU VÀO:
+   - Ảnh khuôn mặt sinh viên (JPG/PNG) qua HTTP API
+   - Thông tin sinh viên: ID, tên, lớp
+   - Ảnh check-in real-time từ camera/upload
+
+2. QUÁ TRÌNH XỬ LÝ:
+   - Tiền xử lý: Face detection (MTCNN), crop, resize
+   - Trích xuất đặc trưng: ArcFace embedding (512-dim)
+   - Multi-image training: Filter outliers, average embeddings
+   - Matching: Cosine similarity với database
+   - Lưu trữ: Ghi vào Cassandra (students, attendance_logs)
+   - Logging: Ghi mọi event vào attendance_logs
+
+3. KẾT QUẢ ĐẠT ĐƯỢC:
+   - Độ chính xác: ~98% với multi-image training
+   - Thời gian xử lý: ~150-300ms/request (CPU)
+   - Real-time processing: Xử lý và lưu ngay lập tức
+   - Scalability: Cassandra hỗ trợ horizontal scaling
+   - Audit trail: Đầy đủ logs và ảnh check-in
+   - Dashboard: Trực quan hóa real-time
+
+4. HƯỚNG PHÁT TRIỂN MỞ RỘNG:
+   - Streaming: Tích hợp Kafka cho high-throughput
+   - Analytics: Spark Streaming để aggregate statistics
+   - ML: Fine-tune ArcFace với dữ liệu thực tế
+   - Visualization: Thêm charts (line, pie, bar) với Chart.js/Plotly
+   - Clustering: Thêm clustering key cho attendance_logs để query theo range
+   - Replication: Tăng replication_factor cho high availability
+   - Caching: Redis cache cho frequently accessed students
+   - Multi-location: Mở rộng location tracking
+   - Mobile app: API sẵn sàng cho mobile clients
+   - Batch processing: Nightly jobs để tính statistics tổng hợp
+
+Hệ thống đã chứng minh khả năng xử lý real-time, lưu trữ hiệu quả với Cassandra, 
+và tích hợp ML models thành công. Kiến trúc có thể mở rộng để phục vụ quy mô lớn hơn.
+
+================================================================================

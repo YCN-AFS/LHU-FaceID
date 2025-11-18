@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LHU FaceID - Hệ thống nhận diện khuôn mặt sinh viên</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0"></script>
+    <!-- BlazeFace Model -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7"></script>
     <style>
         :root {
             --primary: #6366f1;
@@ -676,12 +680,167 @@
     </div>
 
     <script>
+        // BlazeFace model
+        let blazefaceModel = null;
+        let isDetecting = false;
+        let detectionAnimationFrame = null;
+        
+        // Face detection state
+        let lastDetectedFace = null;
+        let faceDetectionStableCount = 0;
+        let noFaceCount = 0; // Counter for consecutive no-face detections
+        const FACE_STABLE_THRESHOLD = 3; // Number of consecutive detections needed
+        const NO_FACE_THRESHOLD = 5; // Number of consecutive no-face detections before resetting
+        
         let selectedFile = null;
         let selectedRegisterFiles = [];
         let capturedImages = [];
         let autoDetectInterval = null;
         let isAutoDetecting = false;
         let currentStream = null;
+        let cooldownUntil = 0; // Timestamp when cooldown ends (0 = no cooldown)
+        let cooldownTimer = null; // Timer for cooldown countdown
+        
+        // Initialize BlazeFace model
+        async function loadBlazeFaceModel() {
+            if (blazefaceModel) return blazefaceModel;
+            
+            try {
+                console.log('Loading BlazeFace model...');
+                blazefaceModel = await blazeface.load();
+                console.log('BlazeFace model loaded successfully');
+                return blazefaceModel;
+            } catch (error) {
+                console.error('Error loading BlazeFace model:', error);
+                return null;
+            }
+        }
+        
+        // Real-time face detection on video using requestAnimationFrame
+        async function detectFacesOnVideo() {
+            const video = document.getElementById('video');
+            const overlay = document.getElementById('overlayCanvas');
+            
+            if (!video || !overlay || !currentStream || !blazefaceModel) {
+                if (detectionAnimationFrame) {
+                    cancelAnimationFrame(detectionAnimationFrame);
+                    detectionAnimationFrame = null;
+                }
+                isDetecting = false;
+                return;
+            }
+            
+            if (video.videoWidth === 0 || video.videoHeight === 0 || video.readyState < 2) {
+                detectionAnimationFrame = requestAnimationFrame(detectFacesOnVideo);
+                return;
+            }
+            
+            // Update overlay canvas size to match video
+            if (overlay.width !== video.videoWidth || overlay.height !== video.videoHeight) {
+                overlay.width = video.videoWidth;
+                overlay.height = video.videoHeight;
+            }
+            
+            try {
+                // Detect faces
+                const predictions = await blazefaceModel.estimateFaces(video, false);
+                const ctx = overlay.getContext('2d');
+                ctx.clearRect(0, 0, overlay.width, overlay.height);
+                
+                // Draw bounding boxes
+                if (predictions && predictions.length > 0) {
+                    // Face detected - reset no-face counter and increment stable count
+                    noFaceCount = 0;
+                    faceDetectionStableCount++;
+                    lastDetectedFace = predictions[0];
+                    
+                    predictions.forEach(p => {
+                        const [x1, y1] = p.topLeft;
+                        const [x2, y2] = p.bottomRight;
+                        const w = x2 - x1;
+                        const h = y2 - y1;
+                        
+                        // Draw bounding box
+                        ctx.strokeStyle = '#00ff00';
+                        ctx.lineWidth = 3;
+                        ctx.strokeRect(x1, y1, w, h);
+                        
+                        // Draw label background
+                        const labelText = 'Khuôn mặt đã phát hiện';
+                        ctx.font = 'bold 14px Arial';
+                        const textMetrics = ctx.measureText(labelText);
+                        const labelWidth = textMetrics.width + 12;
+                        const labelHeight = 20;
+                        
+                        ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
+                        ctx.fillRect(x1, y1 - labelHeight - 5, labelWidth, labelHeight);
+                        
+                        // Draw label text
+                        ctx.fillStyle = '#000000';
+                        ctx.fillText(labelText, x1 + 6, y1 - 10);
+                    });
+                    
+                    // Update status - only show stable status if threshold reached
+                    if (faceDetectionStableCount >= FACE_STABLE_THRESHOLD) {
+                        document.getElementById('verifyStatus').textContent = '✅ Khuôn mặt đã được phát hiện';
+                        document.getElementById('verifyStatus').style.color = '#10b981';
+                    } else {
+                        document.getElementById('verifyStatus').textContent = `👤 Đang phát hiện khuôn mặt... (${faceDetectionStableCount}/${FACE_STABLE_THRESHOLD})`;
+                        document.getElementById('verifyStatus').style.color = '#f59e0b';
+                    }
+                } else {
+                    // No face detected - increment no-face counter
+                    noFaceCount++;
+                    
+                    // Only reset stable count after multiple consecutive no-face detections
+                    if (noFaceCount >= NO_FACE_THRESHOLD) {
+                        faceDetectionStableCount = 0;
+                        lastDetectedFace = null;
+                        document.getElementById('verifyStatus').textContent = '👤 Đang tìm khuôn mặt...';
+                        document.getElementById('verifyStatus').style.color = '#64748b';
+                    } else if (faceDetectionStableCount < FACE_STABLE_THRESHOLD) {
+                        // If we haven't reached stable threshold yet, show searching
+                        document.getElementById('verifyStatus').textContent = '👤 Đang tìm khuôn mặt...';
+                        document.getElementById('verifyStatus').style.color = '#64748b';
+                    }
+                    // If we had stable detection, keep showing it until threshold is reached
+                }
+            } catch (error) {
+                console.error('Error in face detection:', error);
+            }
+            
+            // Continue detection loop
+            if (isDetecting && currentStream) {
+                detectionAnimationFrame = requestAnimationFrame(detectFacesOnVideo);
+            }
+        }
+        
+        // Start face detection loop
+        function startFaceDetection() {
+            if (isDetecting) return;
+            isDetecting = true;
+            detectFacesOnVideo();
+        }
+        
+        // Stop face detection loop
+        function stopFaceDetection() {
+            isDetecting = false;
+            if (detectionAnimationFrame) {
+                cancelAnimationFrame(detectionAnimationFrame);
+                detectionAnimationFrame = null;
+            }
+            
+            // Clear overlay
+            const overlay = document.getElementById('overlayCanvas');
+            if (overlay) {
+                const ctx = overlay.getContext('2d');
+                ctx.clearRect(0, 0, overlay.width, overlay.height);
+            }
+            
+            faceDetectionStableCount = 0;
+            noFaceCount = 0;
+            lastDetectedFace = null;
+        }
 
         function switchTab(tabName) {
             if (currentStream) {
@@ -697,11 +856,22 @@
                 document.getElementById('closeCameraRegisterBtn').style.display = 'none';
                 document.getElementById('videoRegister').srcObject = null;
                 
+                // Stop face detection
+                stopFaceDetection();
+                
                 // Stop auto detect
                 if (autoDetectInterval) {
                     clearInterval(autoDetectInterval);
                     autoDetectInterval = null;
                 }
+                
+                // Clear cooldown timer
+                if (cooldownTimer) {
+                    clearInterval(cooldownTimer);
+                    cooldownTimer = null;
+                }
+                cooldownUntil = 0;
+                
                 isAutoDetecting = false;
                 isProcessing = false;
             }
@@ -1047,6 +1217,17 @@
         // Camera functions
         async function openCamera(type) {
             try {
+                // Load BlazeFace model first
+                if (type === 'verify') {
+                    document.getElementById('verifyStatus').textContent = '⏳ Đang tải mô hình nhận diện...';
+                    document.getElementById('verifyStatus').style.color = '#f59e0b';
+                    await loadBlazeFaceModel();
+                    if (!blazefaceModel) {
+                        alert('Không thể tải mô hình nhận diện khuôn mặt. Vui lòng thử lại.');
+                        return;
+                    }
+                }
+                
                 const constraints = {
                     video: { 
                         facingMode: 'user',
@@ -1067,14 +1248,22 @@
                     document.getElementById('closeCameraBtn').style.display = 'inline-flex';
                     document.getElementById('toggleAutoBtn').style.display = 'inline-flex';
                     
-                    // Wait for video to load, then initialize overlay and auto-start detection
+                    // Reset face detection state
+                    faceDetectionStableCount = 0;
+                    noFaceCount = 0;
+                    lastDetectedFace = null;
+                    
+                    // Wait for video to load, then initialize overlay and start face detection
                     video.onloadedmetadata = () => {
                         if (overlay) {
                             overlay.width = video.videoWidth;
                             overlay.height = video.videoHeight;
                         }
                         
-                        // Auto-start detection after camera is ready
+                        // Start real-time face detection using requestAnimationFrame
+                        startFaceDetection();
+                        
+                        // Auto-start auto detect after camera is ready
                         setTimeout(() => {
                             if (!isAutoDetecting && currentStream) {
                                 toggleAutoDetect();
@@ -1093,11 +1282,22 @@
         }
 
         function closeCamera(type) {
+            // Stop face detection
+            stopFaceDetection();
+            
             // Stop auto detect if running
             if (autoDetectInterval) {
                 clearInterval(autoDetectInterval);
                 autoDetectInterval = null;
             }
+            
+            // Clear cooldown timer
+            if (cooldownTimer) {
+                clearInterval(cooldownTimer);
+                cooldownTimer = null;
+            }
+            cooldownUntil = 0;
+            
             isAutoDetecting = false;
             isProcessing = false;
             
@@ -1162,6 +1362,20 @@
                 return;
             }
 
+            // Check cooldown - don't process if still in cooldown period
+            const now = Date.now();
+            if (cooldownUntil > now) {
+                const remainingSeconds = Math.ceil((cooldownUntil - now) / 1000);
+                document.getElementById('verifyStatus').textContent = `⏳ Đã nhận diện, chờ ${remainingSeconds}s...`;
+                document.getElementById('verifyStatus').style.color = '#64748b';
+                return;
+            }
+
+            // Only proceed if face is stable (detected multiple times)
+            if (faceDetectionStableCount < FACE_STABLE_THRESHOLD || !lastDetectedFace) {
+                return; // Wait for stable face detection
+            }
+
             const video = document.getElementById('video');
             if (!video || !currentStream) return;
             if (video.videoWidth === 0 || video.videoHeight === 0) return;
@@ -1211,17 +1425,14 @@
                 
                 // Handle different response statuses
                 if (result.status === 'no_face') {
-                    // No face detected - keep waiting
+                    // No face detected - reset stability counter gradually
+                    noFaceCount = NO_FACE_THRESHOLD; // Force reset
+                    faceDetectionStableCount = 0;
+                    lastDetectedFace = null;
                     document.getElementById('verifyStatus').textContent = '👤 Đang chờ khuôn mặt...';
                     document.getElementById('verifyStatus').style.color = '#64748b';
-                    // Clear overlay
-                    const overlay = document.getElementById('overlayCanvas');
-                    if (overlay) {
-                        const overlayCtx = overlay.getContext('2d');
-                        overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
-                    }
                 } else if (result.status === 'MATCH') {
-                    // Match found
+                    // Match found - set cooldown to prevent repeated recognition
                     const studentInfo = result.student_info || {};
                     const name = studentInfo.name || 'Unknown';
                     const id = studentInfo.student_id || 'Unknown';
@@ -1230,13 +1441,34 @@
                     previewImage(file, 'verifyPreview');
                     displayVerifyResult(result);
                     
-                    // Reset status after 5 seconds
-                    setTimeout(() => {
-                        if (isAutoDetecting) {
-                            document.getElementById('verifyStatus').textContent = '👤 Đang chờ khuôn mặt...';
-                            document.getElementById('verifyStatus').style.color = '#64748b';
+                    // Set cooldown for 10 seconds (10000ms)
+                    cooldownUntil = Date.now() + 10000;
+                    
+                    // Clear existing cooldown timer
+                    if (cooldownTimer) {
+                        clearInterval(cooldownTimer);
+                    }
+                    
+                    // Start cooldown countdown
+                    let remainingSeconds = 10;
+                    cooldownTimer = setInterval(() => {
+                        remainingSeconds--;
+                        const now = Date.now();
+                        if (cooldownUntil <= now || remainingSeconds <= 0) {
+                            clearInterval(cooldownTimer);
+                            cooldownTimer = null;
+                            cooldownUntil = 0;
+                            if (isAutoDetecting) {
+                                document.getElementById('verifyStatus').textContent = '👤 Đang chờ khuôn mặt...';
+                                document.getElementById('verifyStatus').style.color = '#64748b';
+                            }
+                        } else {
+                            if (isAutoDetecting) {
+                                document.getElementById('verifyStatus').textContent = `✅ ${name} - ${id} (Chờ ${remainingSeconds}s...)`;
+                                document.getElementById('verifyStatus').style.color = '#10b981';
+                            }
                         }
-                    }, 5000);
+                    }, 1000);
                 } else if (result.status === 'UNCERTAIN') {
                     // Uncertain match
                     document.getElementById('verifyStatus').textContent = '⚠️ Không chắc chắn';
@@ -1289,19 +1521,20 @@
                     clearInterval(autoDetectInterval);
                     autoDetectInterval = null;
                 }
+                
+                // Clear cooldown timer
+                if (cooldownTimer) {
+                    clearInterval(cooldownTimer);
+                    cooldownTimer = null;
+                }
+                cooldownUntil = 0;
+                
                 isAutoDetecting = false;
                 isProcessing = false;
                 document.getElementById('toggleAutoBtn').innerHTML = '<i class="fas fa-play"></i> Tiếp tục Auto Detect';
                 document.getElementById('toggleAutoBtn').className = 'btn btn-success';
                 document.getElementById('verifyStatus').textContent = '⏸️ Auto Detect đã tạm dừng';
                 document.getElementById('verifyStatus').style.color = '#64748b';
-                
-                // Clear overlay
-                const overlay = document.getElementById('overlayCanvas');
-                if (overlay) {
-                    const overlayCtx = overlay.getContext('2d');
-                    overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
-                }
             } else {
                 // Resume auto detect
                 const video = document.getElementById('video');
@@ -1311,17 +1544,13 @@
                 }
                 
                 isAutoDetecting = true;
+                faceDetectionStableCount = 0;
+                noFaceCount = 0;
+                lastDetectedFace = null;
                 document.getElementById('toggleAutoBtn').innerHTML = '<i class="fas fa-pause"></i> Tạm dừng Auto Detect';
                 document.getElementById('toggleAutoBtn').className = 'btn btn-warning';
                 document.getElementById('verifyStatus').textContent = '🤖 Auto Detect đang chạy...';
                 document.getElementById('verifyStatus').style.color = '#6366f1';
-                
-                // Initialize overlay canvas
-                const overlay = document.getElementById('overlayCanvas');
-                if (overlay) {
-                    overlay.width = video.videoWidth;
-                    overlay.height = video.videoHeight;
-                }
                 
                 // Start detection loop - check every 2 seconds
                 setTimeout(() => {

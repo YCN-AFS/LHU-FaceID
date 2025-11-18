@@ -44,6 +44,7 @@ models/
 # Data
 data/
 images/
+checkin_images/
 *.jpg
 *.jpeg
 *.png

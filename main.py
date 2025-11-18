@@ -30,10 +30,17 @@ embedder = ArcFaceEmbedder()
 matcher = FaceMatcher()
 
 
+# Directory for storing check-in images
+CHECKIN_IMAGES_DIR = "checkin_images"
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database connection on startup."""
     logger.info("Starting up LHU FaceID API")
+    
+    # Create checkin images directory if it doesn't exist
+    os.makedirs(CHECKIN_IMAGES_DIR, exist_ok=True)
+    logger.info(f"Check-in images directory: {CHECKIN_IMAGES_DIR}")
     
     try:
         db.connect()
@@ -196,15 +203,21 @@ async def verify_face(file: UploadFile = File(...)):
         # Read image
         image = read_image(file)
         
-        # Save image bytes for logging
-        import cv2
-        import io
-        _, buffer = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 85])
-        image_bytes = buffer.tobytes()
+        # Save image to filesystem
+        from uuid import uuid4
+        image_filename = f"{uuid4()}.jpg"
+        image_path = os.path.join(CHECKIN_IMAGES_DIR, image_filename)
+        cv2.imwrite(image_path, image, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        logger.info(f"Saved check-in image to: {image_path}")
         
         # Detect face
         face = face_detector.detect_face(image)
         if face is None:
+            # Delete image if no face detected
+            try:
+                os.remove(image_path)
+            except:
+                pass
             return JSONResponse(
                 content={
                     "status": "no_face",
@@ -222,12 +235,22 @@ async def verify_face(file: UploadFile = File(...)):
             embedding = embedder.get_embedding(image)
             
         if embedding is None:
+            # Delete image if embedding extraction failed
+            try:
+                os.remove(image_path)
+            except:
+                pass
             raise HTTPException(status_code=400, detail="Failed to extract face embedding")
         
         # Get all students from database
         students = db.get_all_students()
         
         if len(students) == 0:
+            # Delete image if no students
+            try:
+                os.remove(image_path)
+            except:
+                pass
             return JSONResponse(
                 content={
                     "status": "no_students",
@@ -245,9 +268,9 @@ async def verify_face(file: UploadFile = File(...)):
         attendance_logger = AttendanceLogger(db.session)
         
         if match is None or match['status'] == 'NO_MATCH':
-            # Log failed recognition with image
+            # Log failed recognition with image path
             if match:
-                attendance_logger.log_failed_recognition(match['similarity'], checkin_image=image_bytes)
+                attendance_logger.log_failed_recognition(match['similarity'], checkin_image_path=image_path)
             
             return JSONResponse(
                 content={
@@ -259,7 +282,7 @@ async def verify_face(file: UploadFile = File(...)):
                 status_code=200
             )
         
-        # Log successful/uncertain recognition with image
+        # Log successful/uncertain recognition with image path
         attendance_logger.log_checkin(
             match['student_id'],
             match['name'],
@@ -267,7 +290,7 @@ async def verify_face(file: UploadFile = File(...)):
             match['similarity'],
             location="main_gate",
             status='success' if match['status'] == 'MATCH' else 'uncertain',
-            checkin_image=image_bytes
+            checkin_image_path=image_path
         )
         
         # Update check-in time if matched
@@ -402,11 +425,11 @@ async def get_checkin_image(log_id: str):
     """
     try:
         from uuid import UUID
-        from fastapi.responses import Response
+        from fastapi.responses import FileResponse
         
-        # Query database for image
+        # Query database for image path
         cql = """
-        SELECT checkin_image
+        SELECT checkin_image_path
         FROM attendance_logs
         WHERE log_id = ?
         """
@@ -414,12 +437,18 @@ async def get_checkin_image(log_id: str):
         prepared = db.session.prepare(cql)
         result = db.session.execute(prepared, [UUID(log_id)]).one()
         
-        if result is None or not hasattr(result, 'checkin_image') or result.checkin_image is None:
+        if result is None or not hasattr(result, 'checkin_image_path') or result.checkin_image_path is None:
             raise HTTPException(status_code=404, detail="Image not found")
         
-        # Return image
-        return Response(
-            content=result.checkin_image,
+        image_path = result.checkin_image_path
+        
+        # Check if file exists
+        if not os.path.exists(image_path):
+            raise HTTPException(status_code=404, detail="Image file not found")
+        
+        # Return image file
+        return FileResponse(
+            path=image_path,
             media_type="image/jpeg"
         )
         

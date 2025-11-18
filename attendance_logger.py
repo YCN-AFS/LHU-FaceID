@@ -19,17 +19,18 @@ class AttendanceLogger:
     def _create_attendance_table(self):
         """Create attendance logging table."""
         try:
-            # First, try to add checkin_image column if it doesn't exist
+            # First, try to add checkin_image_path column if it doesn't exist
+            # If old BLOB column exists, we'll ignore it and use the new TEXT column
             try:
                 cql_alter = """
-                ALTER TABLE attendance_logs ADD checkin_image BLOB;
+                ALTER TABLE attendance_logs ADD checkin_image_path TEXT;
                 """
                 self.session.execute(cql_alter)
-                logger.info("Added checkin_image column to attendance_logs table")
+                logger.info("Added checkin_image_path column to attendance_logs table")
             except Exception as e:
                 # Column might already exist, which is fine
                 if "already exists" not in str(e).lower() and "Invalid" not in str(e):
-                    logger.warning(f"Could not add checkin_image column: {str(e)}")
+                    logger.warning(f"Could not add checkin_image_path column: {str(e)}")
             
             # Create table if not exists
             cql = """
@@ -43,7 +44,7 @@ class AttendanceLogger:
                 confidence_score FLOAT,
                 status TEXT,
                 face_detected BOOLEAN,
-                checkin_image BLOB
+                checkin_image_path TEXT
             );
             """
             self.session.execute(cql)
@@ -53,7 +54,7 @@ class AttendanceLogger:
     
     def log_checkin(self, student_id: str, student_name: str, class_name: str, 
                    confidence: float, location: str = "main_gate", 
-                   status: str = "success", checkin_image: bytes = None) -> bool:
+                   status: str = "success", checkin_image_path: str = None) -> bool:
         """
         Log a check-in event.
         
@@ -64,7 +65,7 @@ class AttendanceLogger:
             confidence: Recognition confidence score
             location: Check-in location
             status: success, uncertain, or failed
-            checkin_image: Image bytes from check-in (optional)
+            checkin_image_path: Path to check-in image file (optional)
             
         Returns:
             True if logged successfully
@@ -80,7 +81,7 @@ class AttendanceLogger:
             INSERT INTO attendance_logs (
                 log_id, student_id, student_name, "class", 
                 checkin_time, location, confidence_score, 
-                status, face_detected, checkin_image
+                status, face_detected, checkin_image_path
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             
@@ -89,7 +90,7 @@ class AttendanceLogger:
             self.session.execute(
                 prepared,
                 (uuid4(), student_id, student_name, class_name, 
-                 datetime.now(), location, confidence, status, True, checkin_image)
+                 datetime.now(), location, confidence, status, True, checkin_image_path)
             )
             
             logger.info(f"Check-in logged: {student_id} at {location}")
@@ -101,14 +102,14 @@ class AttendanceLogger:
             logger.error(f"Traceback: {traceback.format_exc()}")
             return False
     
-    def log_failed_recognition(self, confidence: float, location: str = "main_gate", checkin_image: bytes = None):
+    def log_failed_recognition(self, confidence: float, location: str = "main_gate", checkin_image_path: str = None):
         """
         Log a failed recognition attempt.
         
         Args:
             confidence: Confidence score of best match (even if failed)
             location: Location of attempt
-            checkin_image: Image bytes from check-in (optional)
+            checkin_image_path: Path to check-in image file (optional)
             
         Returns:
             True if logged successfully
@@ -124,7 +125,7 @@ class AttendanceLogger:
             INSERT INTO attendance_logs (
                 log_id, student_id, student_name, "class",
                 checkin_time, location, confidence_score,
-                status, face_detected, checkin_image
+                status, face_detected, checkin_image_path
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             
@@ -134,7 +135,7 @@ class AttendanceLogger:
                 prepared,
                 (uuid4(), None, None, None,
                  datetime.now(), location, confidence, 
-                 "failed", True, checkin_image)
+                 "failed", True, checkin_image_path)
             )
             
             logger.warning(f"Failed recognition logged at {location}")
@@ -160,7 +161,7 @@ class AttendanceLogger:
                 
             cql = """
             SELECT log_id, student_id, student_name, "class",
-                   checkin_time, location, confidence_score, status, checkin_image
+                   checkin_time, location, confidence_score, status, checkin_image_path
             FROM attendance_logs
             WHERE checkin_time >= ? ALLOW FILTERING
             """
@@ -193,11 +194,16 @@ class AttendanceLogger:
                 except Exception as e:
                     logger.warning(f"Could not access class column: {e}")
                 
-                # Check if checkin_image exists
+                # Check if checkin_image_path exists
                 has_image = False
+                image_path = None
                 try:
-                    if hasattr(row, 'checkin_image') and row.checkin_image is not None:
-                        has_image = True
+                    if hasattr(row, 'checkin_image_path') and row.checkin_image_path is not None:
+                        image_path = row.checkin_image_path
+                        # Check if file actually exists
+                        import os
+                        if os.path.exists(image_path):
+                            has_image = True
                 except:
                     pass
                 
@@ -211,7 +217,8 @@ class AttendanceLogger:
                     'location': row.location,
                     'confidence': row.confidence_score,
                     'status': row.status,
-                    'has_image': has_image
+                    'has_image': has_image,
+                    'image_path': image_path
                 })
             
             # Sort by checkin_time descending (newest first)
